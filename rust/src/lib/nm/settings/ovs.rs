@@ -21,6 +21,7 @@ pub(crate) fn create_ovs_port_nm_conn(
     port_conf: &OvsBridgePortConfig,
     exist_nm_conn: Option<&NmConnection>,
     stable_uuid: bool,
+    slave_port_ovsdb: Option<&OvsDbIfaceConfig>,
 ) -> Result<NmConnection, NmstateError> {
     let mut nm_conn = exist_nm_conn.cloned().unwrap_or_default();
     let mut base_iface = BaseInterface::new();
@@ -67,6 +68,8 @@ pub(crate) fn create_ovs_port_nm_conn(
         if let Some(ovsdb_conf) = bond_conf.ovsdb.as_ref() {
             apply_iface_ovsdb_conf(ovsdb_conf, &mut nm_conn);
         }
+    } else if let Some(ovsdb_conf) = slave_port_ovsdb {
+        apply_iface_ovsdb_conf(ovsdb_conf, &mut nm_conn);
     }
     if let Some(vlan_conf) = port_conf.vlan.as_ref() {
         if let Some(tag) = vlan_conf.tag {
@@ -213,6 +216,15 @@ pub(crate) fn gen_nm_iface_ovs_db_setting(
     if iface.iface_type() != InterfaceType::OvsBridge
         && iface.base_iface().controller_type != Some(InterfaceType::OvsBridge)
     {
+        nm_conn.ovs_other_config = None;
+        nm_conn.ovs_ext_ids = None;
+    } else if iface.iface_type() == InterfaceType::Bond
+        && iface.base_iface().controller_type == Some(InterfaceType::OvsBridge)
+    {
+        // Port OpenFlow settings belong on the NM ovs-port connection.
+        // NM refuses to reapply ovs-other-config on bond profiles
+        // (`IncompatibleReapply`); apply_iface_ovsdb_conf runs from
+        // create_ovs_port_nm_conn(..., slave_port_ovsdb) instead.
         nm_conn.ovs_other_config = None;
         nm_conn.ovs_ext_ids = None;
     } else if let Some(conf) = iface.base_iface().ovsdb.as_ref() {

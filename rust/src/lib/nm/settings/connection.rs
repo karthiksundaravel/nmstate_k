@@ -147,11 +147,24 @@ pub(crate) fn iface_to_nm_connections(
                         &ovs_port_conf.name,
                         &NmIfaceType::OvsPort,
                     );
+                let slave_port_ovsdb = if ovs_port_conf.bond.is_none() {
+                    merged_state
+                        .interfaces
+                        .get_iface(&ovs_port_conf.name, InterfaceType::Unknown)
+                        .and_then(|m| {
+                            let iface =
+                                m.for_apply.as_ref().unwrap_or(&m.merged);
+                            iface.base_iface().ovsdb.as_ref()
+                        })
+                } else {
+                    None
+                };
                 ret.push(create_ovs_port_nm_conn(
                     &ovs_br_iface.base.name,
                     ovs_port_conf,
                     exist_nm_ovs_port_conn,
                     stable_uuid,
+                    slave_port_ovsdb,
                 )?)
             }
         }
@@ -301,6 +314,13 @@ pub(crate) fn iface_to_nm_connections(
                             &NmIfaceType::OvsPort,
                         );
 
+                    let attach_slave_ovsdb = merged_iface
+                        .for_apply
+                        .as_ref()
+                        .unwrap_or(&merged_iface.merged)
+                        .base_iface()
+                        .ovsdb
+                        .as_ref();
                     ret.push(create_ovs_port_nm_conn(
                         ctrl,
                         &OvsBridgePortConfig {
@@ -309,6 +329,7 @@ pub(crate) fn iface_to_nm_connections(
                         },
                         exist_nm_ovs_port_conn,
                         stable_uuid,
+                        attach_slave_ovsdb,
                     )?);
                 }
             }
